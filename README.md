@@ -1,66 +1,187 @@
 # prune_ar
 
-One Paragraph of project description goes here
+prune_ar is a gem that prunes database records using passed in deletion criteria & then pruning all subsequently orphaned records. It uses ActiveRecord's `belongs_to` associations in order to find orphaned records. It's main intent is to be able to delete any sets of records you would like to but also making sure that the database is left in a consistent state after the deletion (no orphaned records & no violated foreign key constraints). A side effect of pruning the orphaned records (done for consistency) is that it can be effectively used to prune down the whole database at once by issuing a delete on a top level table. Contently uses this process to prune down its production database down to one that is suitable for use in development (devoid of customer data).
+
+The APIs provided are **destructive** to your database, so don't run this in production.
 
 ## Getting Started
-
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
-
 ### Prerequisites
+##### Production
+No non-gem dependencies.
 
-What things you need to install the software and how to install them
+##### Development & testing
+Make sure to have [sqlite3](https://www.sqlite.org/index.html) installed so you can run the tests.
 
-```
-Give examples
-```
+### Support
 
-### Installing
+#### Database
 
-A step by step series of examples that tell you how to get a development env running
+This gem is known to work with PostgreSQL 9.4, 10.x & sqlite3 (what the tests run against). As of now, the gem only tries to deal with foreign key constraints on PostgreSQL. If you're not on PostgreSQL, this gem will not touch the foreign key constraints, and therefore MAY fail to prune records (if they are blocked by foreign key constraints).
 
-Say what the step will be
+#### ActiveRecord
 
-```
-Give the example
-```
+This gem is known to work with ActiveRecord 5.x but the version has not been fixed in the gemspec to allow you to try it out with other versions of ActiveRecord (where it may well work fine or may not).
 
-And repeat
+### Installation & usage
 
-```
-until finished
-```
+For bundler, add this to your `Gemfile`:
 
-End with an example of getting some data out of the system or using it for a little demo
-
-## Running the tests
-
-Explain how to run the automated tests for this system
-
-### Break down into end to end tests
-
-Explain what these tests test and why
-
-```
-Give an example
+```ruby
+gem "prune_ar", "~> 0.1"
 ```
 
-### And coding style tests
+followed by
 
-Explain what these tests test and why
+```sh
+bundle install
+```
 
+You can also just install the gem without bundler with
+
+```sh
+gem install prune_ar
 ```
-Give an example
+
+#### Usage
+
+Basic example:
+
+```ruby
+require 'prune_ar'
+deletion_criteria = { Account => ["accounts.internal = 'f'"] }
+Rails.application.eager_load! # We do this to make sure all models are loaded
+PruneAr::prune_all_models(deletion_criteria: deletion_criteria)
 ```
+
+This will delete all external `Account`s & any child records that have an upward dependency chain (unlimited number of hops) to those deleted records. If a table does **not** have an upward dependency chain to the `Account` table, it will remain untouched.
+
+Two very similar APIs are provided `PruneAr::prune_models` & `PruneAr::prune_all_models`. The only difference is that `prune_all_models` gathers all models in your application by looking at the descendants of `ActiveRecord::Base` while `prune_models` lets you pass in any list of models you want. The models passed in are the only ones that `PruneAr` will prune orphaned records from.
+
+Here's a brief description of what the main parameters to these APIs mean:
+
+##### :models
+The ActiveRecord models that will be taken into account when pruning
+```ruby
+[Model1, Model2]
+```
+
+##### :deletion_criteria
+The core pruning criteria that you want to execute (will be executed up front)
+```ruby
+{
+  Account => ['accounts.id NOT IN (1, 2)']
+  User => ["users.internal = 'f'", "users.active = 'f'"]
+}
+```
+
+##### :full_delete_models
+Models for which you want to purge all records
+```ruby
+[Model1, Model2]
+```
+
+##### :pre_queries_to_run
+Arbitrary SQL statements to execute before pruning
+```ruby
+['UPDATE users SET invited_by_id = NULL WHERE invited_by_id IS NOT NULL']
+```
+
+##### :conjunctive_deletion_criteria
+Pruning criteria you want executed in conjunction with each iteration of pruning of orphaned records (one case where this is useful if pruning entities which don't have a belongs_to chain to the entities we pruned but instead are associated via join tables)
+```ruby
+{
+    Image => ['NOT EXISTS (SELECT 1 FROM imagings WHERE imagings.image_id = images.id)']
+}
+```
+
+##### :logger
+You can provide your own logger to be used for logging any messages that the API logs
+
+Here is an example of a rake task that is similar to what Contently uses to prune their database:
+
+```ruby
+desc 'Prune tables using prune_ar'
+task prune_tables: :no_prod_env do
+  Rails.application.eager_load!
+  PruneAr::prune_all_models(
+    deletion_criteria: {
+      Account => ['id NOT IN (589, 87)'],
+      User => ["email NOT ILIKE '%@company.com'"]
+    },
+    # This pre-query makes sure that the users that we want to keep (emails like company.com) are not pruned because they were
+    # => invited by another user that doesn't have this email (and hence we've deleted their record)
+    pre_queries_to_run: ["UPDATE users SET invited_by_id = NULL WHERE invited_by_id IS NOT NULL"],
+    # Since images are referenced via a join table, they do not have a direct upward dependency chain to another entity
+    # => so we manually prune them using the query below
+    conjunctive_deletion_criteria: {
+      Image => ['NOT EXISTS (SELECT 1 FROM imagings WHERE imagings.image_id = images.id)']
+    },
+    full_delete_models: [Comment],
+    logger: Logger.new(STDOUT).tap { |l| l.level = Logger::INFO }
+  )
+end
+```
+
+## Details
+
+The motivation for writing prune_ar came about due to two main things:
+
+- wanting a system to specify easy deletion criteria for a few top level tables & have the whole database be pruned accordingly. One use of this is to take a production database, provide a few high level table deletion criteria & end up with a pruned small clean database to be used for development purposes.
+- previous approaches to accomplish the above goal had issues with orphaned records. These orphaned records are fairly harmless on their own, but it creates major issues when one is prevented from adding foreign key constraints to these tables with orphaned records.
+
+prune_ar solves both of these. Here is a high level overview of what the algorithm used in prune_ar does:
+
+1. Gather all `belongs_to` associations for the models given.
+2. Drop all foreign key constraints (if the database supports foreign keys). This is done so prune_ar can delete records without hitting foreign key violation errors.
+3. Run any queries specified in `pre_queries_to_run`.
+4. Run the base deletion provided via `deletion_criteria`.
+5. Truncate tables for `full_delete_models`.
+6. Prune orphaned records & also delete via `conjunctive_deletion_criteria` alongside.
+7. Restore original foreign key constraints (if the database supports foreign keys).
+
+prune_ar handles polymorphic belongs_to & is able to prune [HABTM](https://guides.rubyonrails.org/association_basics.html#the-has-and-belongs-to-many-association) tables in addition simple belongs_to associations.
+
+## Development
+### Installation
+```sh
+gem install bundler
+git clone https://github.com/contently/prune_ar.git
+cd ./prune_ar
+bundle install
+```
+
+### Running the tests
+Assuming you've followed the steps outlined above for the Development installation, you can run
+```sh
+bundle exec rspec
+```
+to execute all tests.
+
+#### Test structure
+Each class has it's own `class_name_spec.rb` file in the [spec](spec) directory. The database [schema](spec/support/schema.rb) & [models](spec/support/models.rb) are located in [spec/support](spec/support).
+
+### Coding style
+Mostly standard rubocop guidelines are followed with a few modications as can be seen in [.rubocop.yml](.rubocop.yml).
 
 ## Deployment
+In order to deploy a new version of the gem to rubygems:
 
-Add additional notes about how to deploy this on a live system
+- Bump the version in [version.rb](lib/prune_ar/version.rb) as appropriate according to [SemVer](http://semver.org/).
+- Commit all changes & merge it to the master branch.
+- On latest master (after a `git pull` on master):
+
+```sh
+rake build
+rake release
+```
+
+If all went well, a new version of this gem should be published on rubygems.
 
 ## Built With
 
-* [Dropwizard](http://www.dropwizard.io/1.0.2/docs/) - The web framework used
-* [Maven](https://maven.apache.org/) - Dependency Management
-* [ROME](https://rometools.github.io/rome/) - Used to generate RSS Feeds
+* [bundler](https://bundler.io/) - Dependency management.
+* [activerecord](https://rubygems.org/gems/activerecord) - This gem is based around ActiveRecord models.
+* [rspec](https://rubygems.org/gems/rspec) - Testing framework.
 
 ## Contributing
 
@@ -79,9 +200,3 @@ See also the list of [contributors](https://github.com/contently/prune_ar/contri
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
-
-## Acknowledgments
-
-* Hat tip to anyone whose code was used
-* Inspiration
-* etc
