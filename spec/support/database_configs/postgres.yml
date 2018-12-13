@@ -1,0 +1,4 @@
+adapter: postgresql
+host: localhost
+username: postgres
+database: circle_test

@@ -38,7 +38,27 @@ RSpec.configure do |config|
   end
 end
 
-# Set up in-memory database with test schema & load test models
-ActiveRecord::Base.establish_connection(adapter: :sqlite3, database: ':memory:')
+# Set up database with test schema & load test models
+def active_record_connection_properties
+  type = case ENV['PRUNE_AR_TEST_DATABASE_TYPE']
+         when 'postgres'
+           'postgres'
+         else
+           'sqlite3'
+         end
+
+  file = "#{File.dirname(__FILE__)}/support/database_configs/#{type}.yml"
+  YAML.load_file(file).transform_keys(&:to_sym)
+end
+
+ActiveRecord::Base.establish_connection(**active_record_connection_properties)
 load File.dirname(__FILE__) + '/support/schema.rb'
 require File.dirname(__FILE__) + '/support/models'
+
+def database_type
+  ActiveRecord::Base.connection.adapter_name.downcase.to_sym
+end
+
+def foreign_keys_supported?
+  %i[postgresql].include?(database_type)
+end

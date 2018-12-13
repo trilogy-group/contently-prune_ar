@@ -1,5 +1,7 @@
 # prune_ar
 
+[![CircleCI](https://circleci.com/gh/contently/prune_ar.svg?style=shield)](https://circleci.com/gh/contently/prune_ar)
+
 prune_ar is a gem that prunes database records using passed in deletion criteria & then pruning all subsequently orphaned records. It uses ActiveRecord's `belongs_to` associations in order to find orphaned records. It's main intent is to be able to delete any sets of records you would like to but also making sure that the database is left in a consistent state after the deletion (no orphaned records & no violated foreign key constraints). A side effect of pruning the orphaned records (done for consistency) is that it can be effectively used to prune down the whole database at once by issuing a delete on a top level table. Contently uses this process to prune down its production database down to one that is suitable for use in development (devoid of customer data).
 
 The APIs provided are **destructive** to your database, so don't run this in production.
