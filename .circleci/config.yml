@@ -91,6 +91,15 @@ jobs:
           DB_WAIT_ADDRESS: tcp://localhost:5432
       - image: circleci/postgres:11-ram
 
+  test-mysql-5:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: mysql
+          DB_WAIT_ADDRESS: tcp://127.0.0.1:3306
+      - image: circleci/mysql:5-ram
+
   test-mysql-8:
     <<: *test-defaults
     docker:
@@ -101,14 +110,23 @@ jobs:
       - image: circleci/mysql:8-ram
         command: [--default-authentication-plugin=mysql_native_password]
 
-  test-mysql-5:
+  test-mariadb-5:
     <<: *test-defaults
     docker:
       - image: circleci/ruby:2.5
         environment:
           PRUNE_AR_TEST_DATABASE_TYPE: mysql
           DB_WAIT_ADDRESS: tcp://127.0.0.1:3306
-      - image: circleci/mysql:5-ram
+      - image: circleci/mariadb:5-ram
+
+  test-mariadb-10:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: mysql
+          DB_WAIT_ADDRESS: tcp://127.0.0.1:3306
+      - image: circleci/mariadb:10-ram
 
   rubocop:
     <<: *environment-defaults
@@ -158,4 +176,6 @@ workflows:
       - test-postgres-11
       - test-mysql-5
       - test-mysql-8
+      - test-mariadb-5
+      - test-mariadb-10
       - rubocop

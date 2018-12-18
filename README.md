@@ -27,6 +27,8 @@ PostgreSQL 10 | Unit tests & real world workload
 PostgreSQL 11 | Unit tests
 MySQL 5 | Unit tests
 MySQL 8 | Unit tests
+MariaDB 5 | Unit tests
+MariaDB 10 | Unit tests
 SQLite 3 | Unit tests
 
 So we certainly have the highest confidence for success with PostgreSQL since we've actually tested the code against a real database. Please let us know your experience (& any issues you face) with this gem when used with your database type.
