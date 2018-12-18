@@ -22,7 +22,11 @@ The gem **should** work with any database since it uses either generic SQL or ab
 
 Database | Level of testing (confidence of success)
 --- | ---
+PostgreSQL 9.2 | Unit tests
+PostgreSQL 9.3 | Unit tests
 PostgreSQL 9.4 | Unit tests & real world workload
+PostgreSQL 9.5 | Unit tests
+PostgreSQL 9.6 | Unit tests
 PostgreSQL 10 | Unit tests & real world workload
 PostgreSQL 11 | Unit tests
 MySQL 5 | Unit tests

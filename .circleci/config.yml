@@ -73,6 +73,42 @@ jobs:
           DB_WAIT_ADDRESS: tcp://localhost:5432
       - image: circleci/postgres:10-alpine-ram
 
+  test-postgres-9.2:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_WAIT_ADDRESS: tcp://localhost:5432
+      - image: circleci/postgres:9.2-alpine-ram
+
+  test-postgres-9.3:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_WAIT_ADDRESS: tcp://localhost:5432
+      - image: circleci/postgres:9.3-alpine-ram
+
+  test-postgres-9.4:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_WAIT_ADDRESS: tcp://localhost:5432
+      - image: circleci/postgres:9.4-alpine-ram
+
+  test-postgres-9.5:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_WAIT_ADDRESS: tcp://localhost:5432
+      - image: circleci/postgres:9.5-alpine-ram
+
   test-postgres-9.6:
     <<: *test-defaults
     docker:
@@ -171,6 +207,10 @@ workflows:
   build:
     jobs:
       - test-sqlite3
+      - test-postgres-9.2
+      - test-postgres-9.3
+      - test-postgres-9.4
+      - test-postgres-9.5
       - test-postgres-9.6
       - test-postgres-10
       - test-postgres-11
