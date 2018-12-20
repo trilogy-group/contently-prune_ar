@@ -18,7 +18,26 @@ Make sure to have [sqlite3](https://www.sqlite.org/index.html) installed so you 
 
 #### Database
 
-This gem is known to work with PostgreSQL 9.4, 10.x & sqlite3 (what the tests run against). As of now, the gem only tries to deal with foreign key constraints on PostgreSQL. If you're not on PostgreSQL, this gem will not touch the foreign key constraints, and therefore MAY fail to prune records (if they are blocked by foreign key constraints).
+The gem **should** work with any database since it uses either generic SQL or abstractions through `ActiveRecord` that should all be general. Sadly, since different databases sometimes have very different behaviors and quirks, one would expect things to possibly break on some databases. These are the databases the gem is tested against & what level of testing is done against them:
+
+Database | Level of testing (confidence of success)
+--- | ---
+PostgreSQL 9.2 | Unit tests
+PostgreSQL 9.3 | Unit tests
+PostgreSQL 9.4 | Unit tests & real world workload
+PostgreSQL 9.5 | Unit tests
+PostgreSQL 9.6 | Unit tests
+PostgreSQL 10 | Unit tests & real world workload
+PostgreSQL 11 | Unit tests
+MySQL 5 | Unit tests
+MySQL 8 | Unit tests
+MariaDB 5 | Unit tests
+MariaDB 10 | Unit tests
+SQLite 3 | Unit tests
+
+So we certainly have the highest confidence for success with PostgreSQL since we've actually tested the code against a real database. Please let us know your experience (& any issues you face) with this gem when used with your database type.
+
+If you use this gem with MySQL (or others with similar behavior), you may want to turn off the sanity checking (which creates foreign key constraints). From my small knowledge of MySQL, I believe it creates an index (if one doesn't exist) when a foreign key constraint is created. The gem does not make any effort to clean up these indexes when the foreign key constraints are deleted. It is possible that MySQL will auto-delete them? (but I'm not sure).
 
 #### ActiveRecord
 
@@ -57,47 +76,64 @@ PruneAr::prune_all_models(deletion_criteria: deletion_criteria)
 
 This will delete all external `Account`s & any child records that have an upward dependency chain (unlimited number of hops) to those deleted records. If a table does **not** have an upward dependency chain to the `Account` table, it will remain untouched.
 
-Two very similar APIs are provided `PruneAr::prune_models` & `PruneAr::prune_all_models`. The only difference is that `prune_all_models` gathers all models in your application by looking at the descendants of `ActiveRecord::Base` while `prune_models` lets you pass in any list of models you want. The models passed in are the only ones that `PruneAr` will prune orphaned records from.
+One API is provided: `PruneAr::prune_all_models`. `prune_all_models` gathers all models in your application by looking at the descendants of `ActiveRecord::Base` so it is vital that you make sure all your `ActiveRecord` models are loaded before you call this. The models gathered here are the only ones that `PruneAr` will prune orphaned records from so if only a subset of your applications models are loaded (& seen by `PruneAr`) your database could be left in an inconsistent (referential integrity wise) state after pruning or be blocked from pruning by foreign keys constraints on tables untracked by `PruneAr`.
 
 Here's a brief description of what the main parameters to these APIs mean:
 
-##### :models
-The ActiveRecord models that will be taken into account when pruning
-```ruby
-[Model1, Model2]
-```
+---
 
 ##### :deletion_criteria
 The core pruning criteria that you want to execute (will be executed up front)
 ```ruby
-{
+deletion_criteria: {
   Account => ['accounts.id NOT IN (1, 2)']
   User => ["users.internal = 'f'", "users.active = 'f'"]
 }
 ```
 
+---
+
 ##### :full_delete_models
 Models for which you want to purge all records
 ```ruby
-[Model1, Model2]
+full_delete_models: [Model1, Model2]
 ```
+
+---
 
 ##### :pre_queries_to_run
 Arbitrary SQL statements to execute before pruning
 ```ruby
-['UPDATE users SET invited_by_id = NULL WHERE invited_by_id IS NOT NULL']
+pre_queries_to_run: ['UPDATE users SET invited_by_id = NULL WHERE invited_by_id IS NOT NULL']
 ```
+
+---
 
 ##### :conjunctive_deletion_criteria
 Pruning criteria you want executed in conjunction with each iteration of pruning of orphaned records (one case where this is useful if pruning entities which don't have a belongs_to chain to the entities we pruned but instead are associated via join tables)
 ```ruby
-{
+conjunctive_deletion_criteria: {
     Image => ['NOT EXISTS (SELECT 1 FROM imagings WHERE imagings.image_id = images.id)']
 }
 ```
 
+---
+
+##### :perform_sanity_check (defaults to true)
+Determines whether `PruneAr` sanity checks it's own pruning by setting (& subsequently removing) foreign key constraints for all belongs_to relations. This is to prove that we maintained referential integrity.
+```ruby
+perform_sanity_check: true
+```
+
+---
+
 ##### :logger
 You can provide your own logger to be used for logging any messages that the API logs
+```ruby
+logger: Logger.new(STDOUT).tap { |l| l.level = Logger::INFO }
+```
+
+---
 
 Here is an example of a rake task that is similar to what Contently uses to prune their database:
 

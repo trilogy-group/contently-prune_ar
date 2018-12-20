@@ -28,9 +28,14 @@ test-defaults: &test-defaults
           - ./vendor/bundle
         key: v1-dependencies-{{ checksum "Gemfile.lock" }}
 
-    # Database setup
-    # - run: bundle exec rake db:create
-    # - run: bundle exec rake db:schema:load
+    - run:
+        name: wait for database
+        command: |
+          if [[ -z "${DB_WAIT_ADDRESS}" ]]; then
+            echo "nothing to wait for"
+          else
+            dockerize -wait ${DB_WAIT_ADDRESS} -timeout 60s
+          fi
 
     # run tests!
     - run:
@@ -65,7 +70,44 @@ jobs:
       - image: circleci/ruby:2.5
         environment:
           PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_WAIT_ADDRESS: tcp://localhost:5432
       - image: circleci/postgres:10-alpine-ram
+
+  test-postgres-9.2:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_WAIT_ADDRESS: tcp://localhost:5432
+      - image: circleci/postgres:9.2-alpine-ram
+
+  test-postgres-9.3:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_WAIT_ADDRESS: tcp://localhost:5432
+      - image: circleci/postgres:9.3-alpine-ram
+
+  test-postgres-9.4:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_WAIT_ADDRESS: tcp://localhost:5432
+      - image: circleci/postgres:9.4-alpine-ram
+
+  test-postgres-9.5:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_WAIT_ADDRESS: tcp://localhost:5432
+      - image: circleci/postgres:9.5-alpine-ram
 
   test-postgres-9.6:
     <<: *test-defaults
@@ -73,6 +115,7 @@ jobs:
       - image: circleci/ruby:2.5
         environment:
           PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_WAIT_ADDRESS: tcp://localhost:5432
       - image: circleci/postgres:9.6-alpine-ram
 
   test-postgres-11:
@@ -81,8 +124,45 @@ jobs:
       - image: circleci/ruby:2.5
         environment:
           PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_WAIT_ADDRESS: tcp://localhost:5432
       - image: circleci/postgres:11-ram
 
+  test-mysql-5:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: mysql
+          DB_WAIT_ADDRESS: tcp://127.0.0.1:3306
+      - image: circleci/mysql:5-ram
+
+  test-mysql-8:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: mysql
+          DB_WAIT_ADDRESS: tcp://127.0.0.1:3306
+      - image: circleci/mysql:8-ram
+        command: [--default-authentication-plugin=mysql_native_password]
+
+  test-mariadb-5:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: mysql
+          DB_WAIT_ADDRESS: tcp://127.0.0.1:3306
+      - image: circleci/mariadb:5-ram
+
+  test-mariadb-10:
+    <<: *test-defaults
+    docker:
+      - image: circleci/ruby:2.5
+        environment:
+          PRUNE_AR_TEST_DATABASE_TYPE: mysql
+          DB_WAIT_ADDRESS: tcp://127.0.0.1:3306
+      - image: circleci/mariadb:10-ram
 
   rubocop:
     <<: *environment-defaults
@@ -127,7 +207,15 @@ workflows:
   build:
     jobs:
       - test-sqlite3
+      - test-postgres-9.2
+      - test-postgres-9.3
+      - test-postgres-9.4
+      - test-postgres-9.5
       - test-postgres-9.6
       - test-postgres-10
       - test-postgres-11
+      - test-mysql-5
+      - test-mysql-8
+      - test-mariadb-5
+      - test-mariadb-10
       - rubocop

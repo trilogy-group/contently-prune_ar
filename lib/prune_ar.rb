@@ -6,9 +6,6 @@ require 'prune_ar/pruner'
 
 # Namespace for all prune_ar code
 module PruneAr
-  # models [required]
-  # => The ActiveRecord models that will be taken into account when pruning.
-  #
   # deletion_criteria
   # => The core pruning criteria that you want to execute (will be executed up front)
   # => {
@@ -32,40 +29,28 @@ module PruneAr
   # => {
   # =>   Image => ['NOT EXISTS (SELECT 1 FROM imagings WHERE imagings.image_id = images.id)']
   # => }
-  def self.prune_models(
-    models:,
-    deletion_criteria: {},
-    full_delete_models: [],
-    pre_queries_to_run: [],
-    conjunctive_deletion_criteria: {},
-    logger: Logger.new(STDOUT).tap { |l| l.level = Logger::WARN }
-  )
-    Pruner.new(
-      models: models,
-      deletion_criteria: deletion_criteria,
-      full_delete_models: full_delete_models,
-      pre_queries_to_run: pre_queries_to_run,
-      conjunctive_deletion_criteria: conjunctive_deletion_criteria,
-      logger: logger
-    ).prune
-  end
-
-  # Same as prune_models but we will gather all models for you
+  #
+  # perform_sanity_check
+  # => Determines whether `PruneAr` sanity checks it's own pruning by setting (& subsequently
+  # => removing) foreign key constraints for all belongs_to relations. This is to prove that
+  # => we maintained referential integrity.
   def self.prune_all_models(
     deletion_criteria: {},
     full_delete_models: [],
     pre_queries_to_run: [],
     conjunctive_deletion_criteria: {},
+    perform_sanity_check: true,
     logger: Logger.new(STDOUT).tap { |l| l.level = Logger::WARN }
   )
-    prune_models(
+    Pruner.new(
       models: all_models,
       deletion_criteria: deletion_criteria,
       full_delete_models: full_delete_models,
       pre_queries_to_run: pre_queries_to_run,
       conjunctive_deletion_criteria: conjunctive_deletion_criteria,
+      perform_sanity_check: perform_sanity_check,
       logger: logger
-    )
+    ).prune
   end
 
   def self.all_models

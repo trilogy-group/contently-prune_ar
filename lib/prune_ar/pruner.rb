@@ -16,7 +16,8 @@ module PruneAr
                 :pre_queries_to_run,
                 :conjunctive_deletion_criteria,
                 :logger,
-                :foreign_key_handler
+                :foreign_key_handler,
+                :perform_sanity_check
 
     def initialize(
       models:,
@@ -24,6 +25,7 @@ module PruneAr
       full_delete_models: [],
       pre_queries_to_run: [],
       conjunctive_deletion_criteria: {},
+      perform_sanity_check: true,
       logger: Logger.new(STDOUT).tap { |l| l.level = Logger::WARN }
     )
       @associations = BelongsToAssociationGatherer.new(models, connection: connection).associations
@@ -32,10 +34,19 @@ module PruneAr
       @deletion_criteria = deletion_criteria
       @conjunctive_deletion_criteria = conjunctive_deletion_criteria
       @logger = logger
-      @foreign_key_handler = ForeignKeyHandler.new(connection: connection, logger: logger)
+      @perform_sanity_check = perform_sanity_check
+      @foreign_key_handler = ForeignKeyHandler.new(
+        models: models,
+        connection: connection,
+        logger: logger
+      )
     end
 
     def prune
+      # Can't wrap in transaction if DDL is not supported in transactions. We use ALTER TABLE
+      # => statements (which are DDL)
+      return prune_core unless connection.supports_ddl_transactions?
+
       # This transaction is helpful when developing/working on this code. If a SQL statement errors,
       # => it leaves the database untouched.
       connection.transaction do
@@ -64,7 +75,7 @@ module PruneAr
       # => this is a sanity check that we eliminated violations
       # => this ignores polymorphic relations since FKs cannot be set on polymorphic :belongs_to
       # => these foreign key constraints are dropped right after since they're only for sanity
-      foreign_key_sanity_check
+      foreign_key_sanity_check if perform_sanity_check
 
       recreate_original_foreign_key_constraints
     end
