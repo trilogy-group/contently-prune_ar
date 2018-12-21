@@ -31,6 +31,11 @@ test-defaults: &test-defaults
     - run:
         name: wait for database
         command: |
+          if [[ -z "${DB_EXTRA_SLEEP}" ]]; then
+            echo "no extra sleep specified"
+          else
+            sleep ${DB_EXTRA_SLEEP}
+          fi
           if [[ -z "${DB_WAIT_ADDRESS}" ]]; then
             echo "nothing to wait for"
           else
@@ -79,6 +84,7 @@ jobs:
       - image: circleci/ruby:2.5
         environment:
           PRUNE_AR_TEST_DATABASE_TYPE: postgres
+          DB_EXTRA_SLEEP: 5s
           DB_WAIT_ADDRESS: tcp://localhost:5432
       - image: circleci/postgres:9.2-alpine-ram
 
